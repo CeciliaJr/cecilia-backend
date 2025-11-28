@@ -14,3 +14,4 @@ def sanitize_output(text):
         if w in text.lower():
             return "Desculpa Audrey 💜 Eu não sei falar sobre isso. Vamos brincar de outra coisa? ✨"
     return text
+
