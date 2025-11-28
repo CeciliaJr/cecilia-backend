@@ -1,0 +1,37 @@
+from fastapi import FastAPI
+from pydantic import BaseModel
+import openai
+import os
+from filters import sanitize_input, sanitize_output
+from languages import detect_language
+from utils import load_persona
+
+app = FastAPI()
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+persona = load_persona("persona_cecilia.txt")
+
+class Message(BaseModel):
+    message: str
+
+@app.post("/cecilia")
+def talk_to_cecilia(msg: Message):
+
+    child_msg = sanitize_input(msg.message)
+    lang = detect_language(child_msg)
+
+    final_prompt = f"{persona}\n\nAudrey disse: {child_msg}\nCecília responde ({lang}):"
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": persona},
+            {"role": "user", "content": child_msg}
+        ],
+        max_tokens=200
+    )
+
+    reply = sanitize_output(response.choices[0].message["content"])
+
+    return {"reply": reply}
