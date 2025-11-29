@@ -9,13 +9,14 @@ from languages import detect_language
 from utils import load_persona
 
 # ========================
-#  Filtro de temas sensíveis
+#  Filtros de segurança
 # ========================
 
 BANNED_KEYWORDS = [
     # sexo / conteúdo adulto
     "sexo", "sexual", "porn", "pornografia", "porno", "nudez", "nua", "nu",
-    "nudes", "nude", "orgasmo", "fetiche", "fetish",
+    "nudes", "nude", "orgasmo", "fetiche", "fetish", "transar", "transa",
+    "pegação", "pegacao", "ficar pelado", "ficar pelada",
     # drogas / abuso
     "maconha", "cocaína", "cocaina", "heroína", "heroina", "lsd",
     "ácido", "acido", "droga", "drogas", "cheirar pó", "cheirar cocaína",
@@ -30,10 +31,33 @@ BANNED_KEYWORDS = [
     "assassinar", "assassinato brutal", "matar pessoas por diversão",
 ]
 
+AMBIGUOUS_ADULT_PATTERNS = [
+    "coisa de adulto",
+    "coisas de adulto",
+    "conversa de adulto",
+    "conversas de adulto",
+    "o que os adultos fazem quando estão sozinhos",
+    "o que os adultos fazem quando estao sozinhos",
+    "o que os adultos fazem sozinhos",
+    "18+",
+    "conteúdo de adulto",
+    "conteudo de adulto",
+]
+
+
 def is_sensitive(text: str) -> bool:
-    """Verifica se o texto contém palavras-chave sensíveis."""
+    """Verifica se o texto contém palavras-chave claramente sensíveis."""
     t = text.lower()
     return any(p in t for p in BANNED_KEYWORDS)
+
+
+def is_ambiguous_adult_question(text: str) -> bool:
+    """
+    Perguntas com cheiro de 'assunto de adulto',
+    mas sem palavra-chave explícita.
+    """
+    t = text.lower()
+    return any(p in t for p in AMBIGUOUS_ADULT_PATTERNS)
 
 
 # ========================
@@ -48,10 +72,10 @@ persona = load_persona("persona_cecilia.txt")
 # Cria a aplicação FastAPI
 app = FastAPI()
 
-# Configura CORS para permitir acesso do frontend
+# Configura CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # depois você pode restringir se quiser
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,7 +95,7 @@ async def talk_to_cecilia(msg: Message):
     # Limpa o texto de entrada
     text = sanitize_input(msg.message)
 
-    # 1) Filtro de temas sensíveis ANTES de chamar o modelo
+    # 1) Filtro duro de temas sensíveis
     if is_sensitive(text):
         safe_reply = (
             "Desculpa, Audrey 💜. Esse é um assunto de adulto ou muito sério, "
@@ -83,13 +107,22 @@ async def talk_to_cecilia(msg: Message):
         )
         return {"reply": safe_reply}
 
-    # Detecta idioma básico (pt/es/en)
-    lang = detect_language(text)
+    # 2) Pergunta com cara de “conversa de adulto”
+    if is_ambiguous_adult_question(text):
+        soft_reply = (
+            "Isso parece um pouco conversa de adulto, né, Audrey? 💜\n"
+            "Adultos fazem muitas coisas normais quando estão sozinhos: trabalham, leem, "
+            "dormem, cozinham, cuidam da casa, estudam, assistem séries e descansam.\n\n"
+            "Mas detalhes mais privados ficam mesmo para os adultos, tá? "
+            "Com você eu adoro falar de histórias, brincadeiras, espaço, animais, "
+            "roblox, escola e todas essas coisas legais do nosso mundo de criança! ✨"
+        )
+        return {"reply": soft_reply}
 
-    # Monta texto do usuário
+    # 3) Fluxo normal com o modelo
+    lang = detect_language(text)
     user_text = f"Audrey disse ({lang}): {text}"
 
-    # 2) Chama o modelo da OpenAI com a persona da Cecília
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -107,10 +140,8 @@ async def talk_to_cecilia(msg: Message):
         return {"reply": reply}
 
     except Exception as e:
-        # Log opcional no servidor (Render mostra isso)
         print("Erro ao falar com OpenAI:", e)
 
-        # Resposta amigável para a Audrey
         fallback = (
             "Ai, eu tive um errinho aqui dentro agora 😅. "
             "Pode tentar de novo em alguns segundinhos? "
